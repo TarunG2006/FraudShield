@@ -1,0 +1,12 @@
+node_modules/
+frontend/node_modules/
+.env
+*.log
+dist/
+build/
+__pycache__/
+*.pyc
+ml-service/models/*.pkl
+ml-service/models/*.joblib
+.DS_Store
+Thumbs.db
