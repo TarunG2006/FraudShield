@@ -13,11 +13,13 @@ router.get('/stats', getQuickStats);
 // GET  /api/transactions — list with filters
 router.get('/', validate(schemas.transactionQuery, 'query'), getAll);
 
+// PATCH /api/transactions/:id/mark-safe — MUST be before /:id to avoid wildcard capture
+router.patch('/:id/mark-safe', requireRole('admin', 'analyst'), markSafe);
+
 // GET  /api/transactions/:id — single transaction
 router.get('/:id', getById);
+
 // POST /api/transactions — submit and score a new transaction
 router.post('/', create);
-// PATCH /api/transactions/:id/mark-safe — analysts and admins only
-router.patch('/:id/mark-safe', requireRole('admin', 'analyst'), markSafe);
 
 module.exports = router;

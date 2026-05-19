@@ -51,6 +51,7 @@ export default function Dashboard() {
       {/* Primary stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
+          key="total-transactions"
           title="Total Transactions"
           value={loading ? '…' : (o.totalTransactions ?? 0).toLocaleString()}
           sub="All time"
@@ -58,6 +59,7 @@ export default function Dashboard() {
           icon="◈"
         />
         <StatCard
+          key="flagged-blocked"
           title="Flagged + Blocked"
           value={loading ? '…' : ((o.flaggedCount ?? 0) + (o.blockedCount ?? 0))}
           sub="Fraud detected"
@@ -65,6 +67,7 @@ export default function Dashboard() {
           icon="⚑"
         />
         <StatCard
+          key="unread-alerts"
           title="Unread Alerts"
           value={loading ? '…' : (o.unreadAlerts ?? 0)}
           sub="Require attention"
@@ -72,6 +75,7 @@ export default function Dashboard() {
           icon="◉"
         />
         <StatCard
+          key="avg-risk"
           title="Avg Risk Score"
           value={loading ? '…' : Number(o.avgRisk ?? 0).toFixed(1)}
           sub="Across all records"
@@ -95,7 +99,7 @@ export default function Dashboard() {
                 tick={{ fill: '#475569', fontSize: 10, fontFamily: 'monospace' }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v) => v.slice(5)} // show MM-DD only
+                tickFormatter={(v) => v.slice(5)}
               />
               <YAxis
                 tick={{ fill: '#475569', fontSize: 10, fontFamily: 'monospace' }}
@@ -120,7 +124,7 @@ export default function Dashboard() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={riskDist} layout="vertical" margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1a2744" horizontal={false} />
-              <XAxis type="number"   tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} />
+              <XAxis type="number" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis
                 type="category"
                 dataKey="name"
@@ -146,10 +150,32 @@ export default function Dashboard() {
       {/* Secondary stats */}
       {!loading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="High Risk (75+)"  value={o.highRiskCount ?? 0}  sub="Risk score >= 75"    accent="red"     icon="▲" />
-          <StatCard title="False Positives"  value={o.falsePositives ?? 0} sub="Marked safe"         accent="emerald" icon="✓" />
-          <StatCard title="Active Rules"     value={o.activeRules ?? 0}    sub="Detection rules on"  accent="blue"    icon="◆" />
           <StatCard
+            key="high-risk"
+            title="High Risk (75+)"
+            value={o.highRiskCount ?? 0}
+            sub="Risk score >= 75"
+            accent="red"
+            icon="▲"
+          />
+          <StatCard
+            key="false-positives"
+            title="False Positives"
+            value={o.falsePositives ?? 0}
+            sub="Marked safe"
+            accent="emerald"
+            icon="✓"
+          />
+          <StatCard
+            key="active-rules"
+            title="Active Rules"
+            value={o.activeRules ?? 0}
+            sub="Detection rules on"
+            accent="blue"
+            icon="◆"
+          />
+          <StatCard
+            key="fraud-rate"
             title="Fraud Rate"
             value={`${o.fraudRate ?? 0}%`}
             sub="Flagged + blocked"
