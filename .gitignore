@@ -9,6 +9,5 @@ build/
 __pycache__/
 *.pyc
 ml-service/models/*.pkl
-
 .DS_Store
 Thumbs.db
