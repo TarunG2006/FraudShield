@@ -9,6 +9,6 @@ build/
 __pycache__/
 *.pyc
 ml-service/models/*.pkl
-ml-service/models/*.joblib
+
 .DS_Store
 Thumbs.db
