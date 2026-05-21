@@ -17,7 +17,10 @@ model        = joblib.load(os.path.join(MODEL_DIR, 'isolation_forest.joblib'))
 scaler       = joblib.load(os.path.join(MODEL_DIR, 'scaler.joblib'))
 FEATURE_COLS = joblib.load(os.path.join(MODEL_DIR, 'feature_columns.joblib'))
 metadata     = joblib.load(os.path.join(MODEL_DIR, 'metadata.joblib'))
-print(f'[app] Ready | ROC-AUC: {metadata["roc_auc"]:.4f} | Features: {len(FEATURE_COLS)}')
+print(f'[app] Ready | Model: IsolationForest | '
+      f'Trained on: {metadata["n_training_rows"]} rows | '
+      f'Features: {len(FEATURE_COLS)} | '
+      f'Threshold: {metadata["anomaly_threshold"]:.4f}')
 
 HIGH_RISK_CATS = {'unknown', 'crypto', 'wire_transfer', 'gambling', 'pawn_shop'}
 
@@ -41,21 +44,29 @@ def build_features(data: dict) -> list:
 
 
 def raw_to_risk(raw_score: float) -> float:
-    """Map IsolationForest decision_function → 0–100 risk score."""
-    clamped    = max(-0.2, min(0.2, raw_score))
-    normalized = (clamped - 0.2) / (-0.4)   # 0 = safe, 1 = fraud
-    return round(float(normalized * 100), 1)
+    """
+    Map IsolationForest decision_function → 0–100 risk score.
+    Calibrated using 5th/95th percentiles of training score distribution
+    so mapping is data-driven, not hardcoded.
+    Lower decision_function = more anomalous = higher risk score.
+    """
+    score_min  = metadata['score_min']   # 5th percentile (most anomalous)
+    score_max  = metadata['score_max']   # 95th percentile (most normal)
+    normalized = (raw_score - score_max) / (score_min - score_max)
+    return round(float(np.clip(normalized, 0, 1) * 100), 1)
 
 
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({
-        'status':           'ok',
-        'model':            'IsolationForest',
-        'roc_auc':          round(metadata['roc_auc'], 4),
-        'n_features':       len(FEATURE_COLS),
-        'feature_names':    FEATURE_COLS,
-        'n_training_rows':  metadata['n_samples'],
+        'status':             'ok',
+        'model':              'IsolationForest',
+        'contamination':      metadata['contamination'],
+        'anomaly_threshold':  round(metadata['anomaly_threshold'], 4),
+        'score_range':        [round(metadata['score_min'], 4), round(metadata['score_max'], 4)],
+        'n_features':         len(FEATURE_COLS),
+        'feature_names':      FEATURE_COLS,
+        'n_training_rows':    metadata['n_training_rows'],
     })
 
 
