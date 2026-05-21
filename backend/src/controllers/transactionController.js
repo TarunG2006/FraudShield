@@ -1,10 +1,11 @@
 const { Op } = require('sequelize');
 const { Transaction, Alert, User, AuditLog } = require('../models');
-const { evaluateTransaction }          = require('../services/fraudEngine');
-const { evaluateWithML }               = require('../services/mlService');
+const { evaluateTransaction }                = require('../services/fraudEngine');
+const { evaluateWithML }                     = require('../services/mlService');
 const { createAlert, emitTransactionUpdate } = require('../services/alertService');
-const { v4: uuidv4 }                   = require('uuid');
-// ── GET /api/transactions ────────────────────────────────────────────
+const { v4: uuidv4 }                         = require('uuid');
+
+// ── GET /api/transactions ─────────────────────────────────────────────────────
 const getAll = async (req, res, next) => {
   try {
     const {
@@ -16,8 +17,7 @@ const getAll = async (req, res, next) => {
     const offset = (parseInt(page) - 1) * parseInt(limit);
     const where  = {};
 
-    // Filters
-    if (status)  where.status = status;
+    if (status) where.status = status;
 
     if (minRisk !== undefined || maxRisk !== undefined) {
       where.risk_score = {};
@@ -27,10 +27,10 @@ const getAll = async (req, res, next) => {
 
     if (search) {
       where[Op.or] = [
-        { merchant_name:    { [Op.iLike]: `%${search}%` } },
-        { cardholder_name:  { [Op.iLike]: `%${search}%` } },
-        { card_last_four:   { [Op.iLike]: `%${search}%` } },
-        { transaction_id:   { [Op.iLike]: `%${search}%` } },
+        { merchant_name:   { [Op.iLike]: `%${search}%` } },
+        { cardholder_name: { [Op.iLike]: `%${search}%` } },
+        { card_last_four:  { [Op.iLike]: `%${search}%` } },
+        { transaction_id:  { [Op.iLike]: `%${search}%` } },
       ];
     }
 
@@ -58,12 +58,12 @@ const getAll = async (req, res, next) => {
       data: {
         transactions: rows,
         pagination: {
-          total:       count,
-          page:        parseInt(page),
-          limit:       parseInt(limit),
-          totalPages:  Math.ceil(count / parseInt(limit)),
-          hasNext:     parseInt(page) < Math.ceil(count / parseInt(limit)),
-          hasPrev:     parseInt(page) > 1,
+          total:      count,
+          page:       parseInt(page),
+          limit:      parseInt(limit),
+          totalPages: Math.ceil(count / parseInt(limit)),
+          hasNext:    parseInt(page) < Math.ceil(count / parseInt(limit)),
+          hasPrev:    parseInt(page) > 1,
         },
       },
     });
@@ -72,7 +72,7 @@ const getAll = async (req, res, next) => {
   }
 };
 
-// ── GET /api/transactions/:id ────────────────────────────────────────
+// ── GET /api/transactions/:id ─────────────────────────────────────────────────
 const getById = async (req, res, next) => {
   try {
     const transaction = await Transaction.findByPk(req.params.id, {
@@ -93,7 +93,7 @@ const getById = async (req, res, next) => {
   }
 };
 
-// ── PATCH /api/transactions/:id/mark-safe ────────────────────────────
+// ── PATCH /api/transactions/:id/mark-safe ────────────────────────────────────
 const markSafe = async (req, res, next) => {
   try {
     const transaction = await Transaction.findByPk(req.params.id);
@@ -110,7 +110,7 @@ const markSafe = async (req, res, next) => {
     }
 
     const oldValues = {
-      status:           transaction.status,
+      status:            transaction.status,
       is_false_positive: transaction.is_false_positive,
     };
 
@@ -121,7 +121,6 @@ const markSafe = async (req, res, next) => {
       marked_safe_at:    new Date(),
     });
 
-    // Audit log
     await AuditLog.create({
       user_id:     req.user.id,
       action:      'MARK_SAFE',
@@ -143,7 +142,7 @@ const markSafe = async (req, res, next) => {
   }
 };
 
-// ── GET /api/transactions/stats ──────────────────────────────────────
+// ── GET /api/transactions/stats ──────────────────────────────────────────────
 const getQuickStats = async (req, res, next) => {
   try {
     const [total, flagged, blocked, safe, highRisk] = await Promise.all([
@@ -162,7 +161,8 @@ const getQuickStats = async (req, res, next) => {
     next(error);
   }
 };
-// ── POST /api/transactions ──────────────────────────────────────────────────
+
+// ── POST /api/transactions ────────────────────────────────────────────────────
 const create = async (req, res, next) => {
   try {
     const {
@@ -180,6 +180,18 @@ const create = async (req, res, next) => {
       });
     }
 
+    // ── Fetch last 24h transactions for this card from DB ─────────────────────
+    // Used for velocity, structuring, and cycling detection in fraudEngine.
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentTransactions = await Transaction.findAll({
+      where: {
+        card_last_four,
+        transaction_time: { [Op.gte]: since24h },
+      },
+      attributes: ['id', 'amount', 'transaction_time', 'merchant_name'],
+      order: [['transaction_time', 'DESC']],
+    });
+
     // Scoring payload — shape matches fraudEngine + mlService expectations
     const txnPayload = {
       amount,
@@ -192,11 +204,11 @@ const create = async (req, res, next) => {
       createdAt:        new Date(),
     };
 
-    // 1. Rule-based score
+    // 1. Rule-based score — now receives LIVE recent transactions
     const { riskScore: ruleScore, riskLevel, triggeredRules, recommendation } =
-      await evaluateTransaction(txnPayload, []);
+      await evaluateTransaction(txnPayload, recentTransactions);
 
-    // 2. ML score + combined final score
+    // 2. ML score + combined final score (70% rule + 30% ML)
     const { mlScore, finalScore } = await evaluateWithML(txnPayload, ruleScore);
 
     // 3. Status from final score
@@ -248,4 +260,5 @@ const create = async (req, res, next) => {
     next(error);
   }
 };
+
 module.exports = { getAll, getById, markSafe, getQuickStats, create };

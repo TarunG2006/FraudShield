@@ -11,10 +11,10 @@ const sequelize = new Sequelize(
     dialect: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     dialectOptions: {
-      ssl: {
+      ssl: process.env.NODE_ENV === 'production' ? {
         require: true,
-        rejectUnauthorized: false
-      }
+        rejectUnauthorized: false,
+      } : false,
     },
     pool: {
       max: 10,
