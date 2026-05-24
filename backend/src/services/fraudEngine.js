@@ -2,36 +2,34 @@
 
 const { FraudRule } = require('../models');
 
-// Maps DB rule name → internal check key
-// DB name must match exactly what's in fraud_rules.name
 const RULE_MAP = {
-  'High Amount Threshold':    'HIGH_AMOUNT',
-  'High Risk Category':       'HIGH_RISK_CATEGORY',
-  'Blacklisted Merchant':     'BLACKLISTED_MERCHANT',
+  'High Amount Threshold':       'HIGH_AMOUNT',
+  'High Risk Category':          'HIGH_RISK_CATEGORY',
+  'Blacklisted Merchant':        'BLACKLISTED_MERCHANT',
   'Velocity Check - 5 per hour': 'VELOCITY',
-  'Foreign Country Transaction':  'UNUSUAL_LOCATION',
-  'Midnight Transaction':     'ODD_HOURS',
-  'ML Anomaly Score':         'ML_ANOMALY',
-  'Structuring Detection':    'STRUCTURING',
-  'Cycling 24h':              'CYCLING_24H',
-  'Round Amount':             'ROUND_AMOUNT',
-  'Round-Trip Cycling':       'ROUND_TRIP_CYCLING',
-  'Amount Acceleration':      'AMOUNT_ACCELERATION',
+  'Foreign Country Transaction': 'UNUSUAL_LOCATION',
+  'Midnight Transaction':        'ODD_HOURS',
+  'ML Anomaly Score':            'ML_ANOMALY',
+  'Structuring Detection':       'STRUCTURING',
+  'Cycling 24h':                 'CYCLING_24H',
+  'Round Amount':                'ROUND_AMOUNT',
+  'Round-Trip Cycling':          'ROUND_TRIP_CYCLING',
+  'Amount Acceleration':         'AMOUNT_ACCELERATION',
 };
 
 const RULE_DEFINITIONS = {
-  HIGH_AMOUNT:         { points: 30,  label: 'High transaction amount (>$5,000)' },
-  HIGH_RISK_CATEGORY:  { points: 30,  label: 'High-risk merchant category (crypto/gambling)' },
-  BLACKLISTED_MERCHANT:{ points: 35,  label: 'Blacklisted merchant' },
-  VELOCITY:            { points: 25,  label: 'High velocity (>5 transactions in 1 hour)' },
-  UNUSUAL_LOCATION:    { points: 20,  label: 'Unusual transaction location' },
-  ODD_HOURS:           { points: 15,  label: 'Transaction during odd hours (1AM-5AM)' },
-  STRUCTURING:         { points: 20,  label: 'Structuring pattern (amounts just below reporting threshold)' },
-  CYCLING_24H:         { points: 20,  label: 'Cycling pattern (>10 transactions in 24 hours)' },
-  ROUND_AMOUNT:        { points: 10,  label: 'Suspiciously round amount' },
-  ROUND_TRIP_CYCLING:  { points: 25,  label: 'Round-trip cycling (layering across 3+ merchants)' },
-  AMOUNT_ACCELERATION: { points: 20,  label: 'Amount acceleration (exponential growth pattern)' },
-  ML_ANOMALY:          { points: 0,   label: 'ML anomaly score' }, // ML handled separately
+  HIGH_AMOUNT:          { points: 30, label: 'High transaction amount (>$5,000)' },
+  HIGH_RISK_CATEGORY:   { points: 30, label: 'High-risk merchant category (crypto/gambling)' },
+  BLACKLISTED_MERCHANT: { points: 35, label: 'Blacklisted merchant' },
+  VELOCITY:             { points: 25, label: 'High velocity (>5 transactions in 1 hour)' },
+  UNUSUAL_LOCATION:     { points: 20, label: 'Unusual transaction location' },
+  ODD_HOURS:            { points: 15, label: 'Transaction during odd hours (1AM-5AM)' },
+  STRUCTURING:          { points: 20, label: 'Structuring pattern (amounts just below reporting threshold)' },
+  CYCLING_24H:          { points: 20, label: 'Cycling pattern (>10 transactions in 24 hours)' },
+  ROUND_AMOUNT:         { points: 10, label: 'Suspiciously round amount' },
+  ROUND_TRIP_CYCLING:   { points: 25, label: 'Round-trip cycling (layering across 3+ merchants)' },
+  AMOUNT_ACCELERATION:  { points: 20, label: 'Amount acceleration (exponential growth pattern)' },
+  ML_ANOMALY:           { points: 0,  label: 'ML anomaly score' },
 };
 
 const BLACKLISTED_MERCHANTS = [
@@ -47,8 +45,6 @@ const STRUCTURING_BANDS = [
   { min: 9000, max: 9999 },
 ];
 
-// ── Individual rule check functions ──────────────────────────────────────────
-
 function checkHighAmount(transaction) {
   return parseFloat(transaction.amount) > 5000;
 }
@@ -56,9 +52,9 @@ function checkHighAmount(transaction) {
 function checkVelocity(recentTransactions) {
   if (!Array.isArray(recentTransactions) || recentTransactions.length === 0) return false;
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const count = recentTransactions.filter(tx => {
-    return new Date(tx.transaction_time || tx.createdAt) >= oneHourAgo;
-  }).length;
+  const count = recentTransactions.filter(tx =>
+    new Date(tx.transaction_time || tx.createdAt) >= oneHourAgo
+  ).length;
   return count > 5;
 }
 
@@ -142,7 +138,6 @@ function checkHighRiskCategory(transaction) {
   return ['crypto', 'gambling', 'gaming', 'adult', 'forex'].includes(cat);
 }
 
-// ── Map rule key → check function ────────────────────────────────────────────
 const RULE_CHECKERS = {
   HIGH_AMOUNT:          (tx, recent) => checkHighAmount(tx),
   HIGH_RISK_CATEGORY:   (tx, recent) => checkHighRiskCategory(tx),
@@ -155,23 +150,24 @@ const RULE_CHECKERS = {
   ROUND_AMOUNT:         (tx, recent) => checkRoundAmount(tx),
   ROUND_TRIP_CYCLING:   (tx, recent) => checkRoundTripCycling(tx, recent),
   AMOUNT_ACCELERATION:  (tx, recent) => checkAmountAcceleration(tx, recent),
-  ML_ANOMALY:           (tx, recent) => false, // handled by mlService
+  ML_ANOMALY:           (tx, recent) => false,
 };
 
-// ── Fetch active rules from DB (cached per request, not globally) ─────────────
-async function getActiveRuleKeys() {
+async function getActiveRules() {
   const activeRules = await FraudRule.findAll({
     where: { is_active: true },
-    attributes: ['name', 'score_weight'],
+    attributes: ['id', 'name', 'score_weight'],
   });
 
-  // Build a set of active engine keys + their DB-defined weights
-  const activeMap = {}; // engineKey → score_weight
+  const activeMap = {}; // engineKey → { weight, id, dbName }
   for (const dbRule of activeRules) {
     const engineKey = RULE_MAP[dbRule.name];
     if (engineKey) {
-      // Use DB weight if defined, fall back to hardcoded default
-      activeMap[engineKey] = dbRule.score_weight || RULE_DEFINITIONS[engineKey]?.points || 10;
+      activeMap[engineKey] = {
+        weight: dbRule.score_weight || RULE_DEFINITIONS[engineKey]?.points || 10,
+        id:     dbRule.id,
+        dbName: dbRule.name,
+      };
     }
   }
   return activeMap;
@@ -196,15 +192,14 @@ function getRecommendation(riskLevel, triggeredRules) {
   }
 }
 
-// ── Main evaluation function ──────────────────────────────────────────────────
 async function evaluateTransaction(transaction, recentTransactions = []) {
-  // Fetch which rules are currently active from DB
-  const activeRuleMap = await getActiveRuleKeys();
+  const activeRuleMap = await getActiveRules();
 
   const triggeredRules = [];
+  const firedRuleIds   = []; // for trigger_count increment
   let totalPoints = 0;
 
-  for (const [engineKey, weight] of Object.entries(activeRuleMap)) {
+  for (const [engineKey, { weight, id }] of Object.entries(activeRuleMap)) {
     const checker = RULE_CHECKERS[engineKey];
     if (!checker) continue;
 
@@ -212,11 +207,20 @@ async function evaluateTransaction(transaction, recentTransactions = []) {
     if (fired) {
       triggeredRules.push(RULE_DEFINITIONS[engineKey]?.label || engineKey);
       totalPoints += weight;
+      firedRuleIds.push(id);
     }
   }
 
-  const riskScore     = Math.min(totalPoints, 100);
-  const riskLevel     = getRiskLevel(riskScore);
+  // Increment trigger_count for all fired rules in one query
+  if (firedRuleIds.length > 0) {
+    await FraudRule.increment('trigger_count', {
+      by:    1,
+      where: { id: firedRuleIds },
+    });
+  }
+
+  const riskScore      = Math.min(totalPoints, 100);
+  const riskLevel      = getRiskLevel(riskScore);
   const recommendation = getRecommendation(riskLevel, triggeredRules);
 
   return { riskScore, riskLevel, triggeredRules, recommendation };

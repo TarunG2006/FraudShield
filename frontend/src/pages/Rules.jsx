@@ -43,28 +43,20 @@ const TYPE_COLORS = {
 const RULE_TYPES = ['threshold', 'velocity', 'geo', 'pattern', 'ml'];
 
 const EMPTY_FORM = {
-  name: '',
-  description: '',
-  rule_type: 'threshold',
-  score_weight: 20,
-  is_active: true,
-  conditions: '{}',
+  name: '', description: '', rule_type: 'threshold',
+  score_weight: 20, is_active: true, conditions: '{}',
 };
 
-// ── Toggle Switch Component ──────────────────────────────────
+// ── Toggle ───────────────────────────────────────────────────
 function Toggle({ checked, onChange, disabled }) {
   return (
-    <button
-      onClick={onChange}
-      disabled={disabled}
-      style={{
-        position: 'relative', display: 'inline-flex', alignItems: 'center',
-        width: '44px', height: '24px', borderRadius: '12px', border: 'none',
-        cursor: disabled ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
-        background: checked ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-        opacity: disabled ? 0.5 : 1, flexShrink: 0,
-      }}
-    >
+    <button onClick={onChange} disabled={disabled} style={{
+      position: 'relative', display: 'inline-flex', alignItems: 'center',
+      width: '44px', height: '24px', borderRadius: '12px', border: 'none',
+      cursor: disabled ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
+      background: checked ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+      opacity: disabled ? 0.5 : 1, flexShrink: 0,
+    }}>
       <span style={{
         position: 'absolute', width: '18px', height: '18px', borderRadius: '50%',
         background: '#fff', transition: 'left 0.2s',
@@ -75,19 +67,19 @@ function Toggle({ checked, onChange, disabled }) {
   );
 }
 
-// ── Modal ────────────────────────────────────────────────────
+// ── Rule Modal ───────────────────────────────────────────────
 function RuleModal({ rule, onClose, onSave }) {
   const [form, setForm] = useState(rule ? {
-    name: rule.name || '',
-    description: rule.description || '',
-    rule_type: rule.rule_type || 'threshold',
+    name:         rule.name || '',
+    description:  rule.description || '',
+    rule_type:    rule.rule_type || 'threshold',
     score_weight: rule.score_weight || 20,
-    is_active: rule.is_active ?? true,
-    conditions: typeof rule.conditions === 'object'
+    is_active:    rule.is_active ?? true,
+    conditions:   typeof rule.conditions === 'object'
       ? JSON.stringify(rule.conditions, null, 2)
       : rule.conditions || '{}',
   } : EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
+  const [saving,    setSaving]    = useState(false);
   const [jsonError, setJsonError] = useState('');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -102,15 +94,13 @@ function RuleModal({ rule, onClose, onSave }) {
     if (!form.name.trim()) return toast.error('Rule name is required');
     if (jsonError) return toast.error('Fix JSON in conditions field');
     try { JSON.parse(form.conditions); } catch { return toast.error('Conditions must be valid JSON'); }
-
     setSaving(true);
     try {
-      const payload = {
+      await onSave({
         ...form,
         score_weight: parseInt(form.score_weight),
-        conditions: JSON.parse(form.conditions),
-      };
-      await onSave(payload);
+        conditions:   JSON.parse(form.conditions),
+      });
       onClose();
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Failed to save rule');
@@ -130,7 +120,6 @@ function RuleModal({ rule, onClose, onSave }) {
         borderRadius: '12px', width: '100%', maxWidth: '520px',
         maxHeight: '90vh', overflowY: 'auto',
       }}>
-        {/* Header */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)',
@@ -138,38 +127,20 @@ function RuleModal({ rule, onClose, onSave }) {
           <h2 style={{ margin: 0, color: '#f1f5f9', fontSize: '16px', fontWeight: 600 }}>
             {rule ? 'Edit Rule' : 'New Fraud Rule'}
           </h2>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', color: '#94a3b8',
-            cursor: 'pointer', padding: '4px', borderRadius: '4px',
-          }}><XIcon /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}>
+            <XIcon />
+          </button>
         </div>
 
-        {/* Body */}
         <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-          {/* Name */}
           <div>
             <label style={labelStyle}>Rule Name *</label>
-            <input
-              value={form.name}
-              onChange={e => set('name', e.target.value)}
-              placeholder="e.g. High Amount Threshold"
-              style={inputStyle}
-            />
+            <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. High Amount Threshold" style={inputStyle} />
           </div>
-
-          {/* Description */}
           <div>
             <label style={labelStyle}>Description</label>
-            <input
-              value={form.description}
-              onChange={e => set('description', e.target.value)}
-              placeholder="What does this rule detect?"
-              style={inputStyle}
-            />
+            <input value={form.description} onChange={e => set('description', e.target.value)} placeholder="What does this rule detect?" style={inputStyle} />
           </div>
-
-          {/* Type + Weight row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <label style={labelStyle}>Rule Type</label>
@@ -179,44 +150,27 @@ function RuleModal({ rule, onClose, onSave }) {
             </div>
             <div>
               <label style={labelStyle}>Score Weight (1–100)</label>
-              <input
-                type="number" min="1" max="100"
-                value={form.score_weight}
-                onChange={e => set('score_weight', e.target.value)}
-                style={inputStyle}
-              />
+              <input type="number" min="1" max="100" value={form.score_weight} onChange={e => set('score_weight', e.target.value)} style={inputStyle} />
             </div>
           </div>
-
-          {/* Conditions JSON */}
           <div>
             <label style={labelStyle}>
               Conditions (JSON)
               {jsonError && <span style={{ color: '#f87171', marginLeft: '8px', fontSize: '11px' }}>{jsonError}</span>}
             </label>
             <textarea
-              value={form.conditions}
-              onChange={e => handleConditionsChange(e.target.value)}
-              rows={4}
-              placeholder='{"min_amount": 5000}'
+              value={form.conditions} onChange={e => handleConditionsChange(e.target.value)}
+              rows={4} placeholder='{"min_amount": 5000}'
               style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px', resize: 'vertical' }}
             />
           </div>
-
-          {/* Active toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Toggle checked={form.is_active} onChange={() => set('is_active', !form.is_active)} />
-            <span style={{ color: '#94a3b8', fontSize: '14px' }}>
-              Rule is {form.is_active ? 'active' : 'inactive'}
-            </span>
+            <span style={{ color: '#94a3b8', fontSize: '14px' }}>Rule is {form.is_active ? 'active' : 'inactive'}</span>
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{
-          padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.08)',
-          display: 'flex', justifyContent: 'flex-end', gap: '10px',
-        }}>
+        <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button onClick={onClose} style={ghostBtnStyle}>Cancel</button>
           <button onClick={handleSubmit} disabled={saving} style={primaryBtnStyle}>
             {saving ? 'Saving...' : rule ? 'Save Changes' : 'Create Rule'}
@@ -227,7 +181,7 @@ function RuleModal({ rule, onClose, onSave }) {
   );
 }
 
-// ── Delete Confirm Modal ─────────────────────────────────────
+// ── Delete Modal ─────────────────────────────────────────────
 function DeleteModal({ rule, onClose, onConfirm }) {
   const [deleting, setDeleting] = useState(false);
   return (
@@ -241,20 +195,12 @@ function DeleteModal({ rule, onClose, onConfirm }) {
       }}>
         <h3 style={{ margin: '0 0 8px', color: '#f1f5f9' }}>Delete Rule</h3>
         <p style={{ color: '#94a3b8', margin: '0 0 20px', fontSize: '14px', lineHeight: 1.5 }}>
-          Are you sure you want to delete <strong style={{ color: '#f1f5f9' }}>{rule.name}</strong>?
-          This cannot be undone.
+          Are you sure you want to delete <strong style={{ color: '#f1f5f9' }}>{rule.name}</strong>? This cannot be undone.
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button onClick={onClose} style={ghostBtnStyle}>Cancel</button>
-          <button
-            disabled={deleting}
-            onClick={async () => {
-              setDeleting(true);
-              await onConfirm();
-              setDeleting(false);
-            }}
-            style={{ ...primaryBtnStyle, background: '#ef4444' }}
-          >
+          <button disabled={deleting} onClick={async () => { setDeleting(true); await onConfirm(); setDeleting(false); }}
+            style={{ ...primaryBtnStyle, background: '#ef4444' }}>
             {deleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>
@@ -265,17 +211,17 @@ function DeleteModal({ rule, onClose, onConfirm }) {
 
 // ── Main Rules Page ──────────────────────────────────────────
 export default function Rules() {
-  const [rules, setRules] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [editRule, setEditRule] = useState(null);
+  const [rules,      setRules]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [editRule,   setEditRule]   = useState(null);
   const [deleteRule, setDeleteRule] = useState(null);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew,    setShowNew]    = useState(false);
   const [togglingId, setTogglingId] = useState(null);
 
   const fetchRules = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/rules');
+      const res  = await api.get('/rules');
       const data = res.data?.data || res.data || [];
       setRules(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -287,11 +233,10 @@ export default function Rules() {
 
   useEffect(() => { fetchRules(); }, [fetchRules]);
 
-  // ── Toggle active/inactive ──
   const handleToggle = async (rule) => {
     setTogglingId(rule.id);
     try {
-      const res = await api.patch(`/rules/${rule.id}/toggle`);
+      const res     = await api.patch(`/rules/${rule.id}/toggle`);
       const updated = res.data?.data || res.data;
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, is_active: updated?.is_active ?? !r.is_active } : r));
       toast.success(`Rule ${updated?.is_active ? 'activated' : 'deactivated'}`);
@@ -302,25 +247,22 @@ export default function Rules() {
     }
   };
 
-  // ── Create new rule ──
   const handleCreate = async (payload) => {
-    const res = await api.post('/rules', payload);
+    const res     = await api.post('/rules', payload);
     const newRule = res.data?.data || res.data;
     setRules(prev => [...prev, newRule]);
     toast.success('Rule created');
     setShowNew(false);
   };
 
-  // ── Edit rule ──
   const handleEdit = async (payload) => {
-    const res = await api.put(`/rules/${editRule.id}`, payload);
+    const res     = await api.put(`/rules/${editRule.id}`, payload);
     const updated = res.data?.data || res.data;
     setRules(prev => prev.map(r => r.id === editRule.id ? { ...r, ...updated } : r));
     toast.success('Rule updated');
     setEditRule(null);
   };
 
-  // ── Delete rule ──
   const handleDelete = async () => {
     try {
       await api.delete(`/rules/${deleteRule.id}`);
@@ -332,30 +274,33 @@ export default function Rules() {
     }
   };
 
-  const activeCount = rules.filter(r => r.is_active).length;
+  const activeCount  = rules.filter(r => r.is_active).length;
+  const totalFires   = rules.reduce((sum, r) => sum + (r.trigger_count || 0), 0);
+
+  // Grid: Name | Description | Weight | Fires | Type | Status | Actions
+  const GRID = '2fr 3fr 60px 60px 90px 90px 100px';
 
   return (
-    <div style={{ padding: '28px', maxWidth: '1100px' }}>
+    <div style={{ padding: '28px', maxWidth: '1200px' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
         <div>
-          <h1 style={{ margin: '0 0 4px', color: '#f1f5f9', fontSize: '24px', fontWeight: 700 }}>
-            Fraud Rules
-          </h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>Manage detection rules</p>
+          <h1 style={{ margin: '0 0 4px', color: '#f1f5f9', fontSize: '24px', fontWeight: 700 }}>Fraud Rules</h1>
+          <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>Manage detection rules — toggles affect live fraud scoring</p>
         </div>
         <button onClick={() => setShowNew(true)} style={{ ...primaryBtnStyle, display: 'flex', alignItems: 'center', gap: '6px' }}>
           <PlusIcon /> New Rule
         </button>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
         {[
-          { label: 'Total Rules', value: rules.length },
-          { label: 'Active', value: activeCount, color: '#34d399' },
-          { label: 'Inactive', value: rules.length - activeCount, color: '#f87171' },
+          { label: 'Total Rules',  value: rules.length },
+          { label: 'Active',       value: activeCount,                   color: '#34d399' },
+          { label: 'Inactive',     value: rules.length - activeCount,    color: '#f87171' },
+          { label: 'Total Fires',  value: totalFires.toLocaleString(),   color: '#f97316' },
         ].map(s => (
           <div key={s.label} style={{
             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
@@ -372,14 +317,19 @@ export default function Rules() {
         background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)',
         borderRadius: '12px', overflow: 'hidden',
       }}>
-        {/* Table header */}
+        {/* Header */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '2fr 3fr 1fr 90px 90px 100px',
+          display: 'grid', gridTemplateColumns: GRID,
           padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)',
           color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em',
         }}>
-          <span>Rule Name</span><span>Description</span><span>Weight</span>
-          <span>Type</span><span style={{ textAlign: 'center' }}>Status</span><span style={{ textAlign: 'right' }}>Actions</span>
+          <span>Rule Name</span>
+          <span>Description</span>
+          <span>Weight</span>
+          <span style={{ color: '#f97316' }}>Fires</span>
+          <span>Type</span>
+          <span style={{ textAlign: 'center' }}>Status</span>
+          <span style={{ textAlign: 'right' }}>Actions</span>
         </div>
 
         {loading ? (
@@ -392,12 +342,16 @@ export default function Rules() {
         ) : (
           rules.map((rule, i) => {
             const typeStyle = TYPE_COLORS[rule.rule_type] || TYPE_COLORS.threshold;
+            const fires     = rule.trigger_count || 0;
+            // Color fires count: orange if >0, muted if 0
+            const firesColor = fires > 50 ? '#ef4444' : fires > 10 ? '#f97316' : fires > 0 ? '#fbbf24' : '#475569';
             return (
               <div key={rule.id} style={{
-                display: 'grid', gridTemplateColumns: '2fr 3fr 1fr 90px 90px 100px',
+                display: 'grid', gridTemplateColumns: GRID,
                 padding: '16px 20px', alignItems: 'center',
                 borderBottom: i < rules.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
                 transition: 'background 0.15s',
+                opacity: rule.is_active ? 1 : 0.55,
               }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -417,6 +371,11 @@ export default function Rules() {
                   +{rule.score_weight}
                 </div>
 
+                {/* Fires — trigger_count */}
+                <div style={{ color: firesColor, fontSize: '14px', fontWeight: fires > 0 ? 700 : 400, fontFamily: 'monospace' }}>
+                  {fires > 0 ? fires.toLocaleString() : '—'}
+                </div>
+
                 {/* Type badge */}
                 <div>
                   <span style={{
@@ -431,11 +390,7 @@ export default function Rules() {
 
                 {/* Toggle */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                  <Toggle
-                    checked={rule.is_active}
-                    onChange={() => handleToggle(rule)}
-                    disabled={togglingId === rule.id}
-                  />
+                  <Toggle checked={rule.is_active} onChange={() => handleToggle(rule)} disabled={togglingId === rule.id} />
                   <span style={{ color: rule.is_active ? '#34d399' : '#64748b', fontSize: '11px', fontWeight: 600, minWidth: '24px' }}>
                     {togglingId === rule.id ? '...' : rule.is_active ? 'ON' : 'OFF'}
                   </span>
@@ -443,16 +398,8 @@ export default function Rules() {
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => setEditRule(rule)}
-                    style={{ ...iconBtnStyle, color: '#60a5fa' }}
-                    title="Edit rule"
-                  ><EditIcon /></button>
-                  <button
-                    onClick={() => setDeleteRule(rule)}
-                    style={{ ...iconBtnStyle, color: '#f87171' }}
-                    title="Delete rule"
-                  ><TrashIcon /></button>
+                  <button onClick={() => setEditRule(rule)} style={{ ...iconBtnStyle, color: '#60a5fa' }} title="Edit rule"><EditIcon /></button>
+                  <button onClick={() => setDeleteRule(rule)} style={{ ...iconBtnStyle, color: '#f87171' }} title="Delete rule"><TrashIcon /></button>
                 </div>
               </div>
             );
@@ -460,9 +407,8 @@ export default function Rules() {
         )}
       </div>
 
-      {/* Modals */}
-      {showNew   && <RuleModal rule={null}    onClose={() => setShowNew(false)}   onSave={handleCreate} />}
-      {editRule  && <RuleModal rule={editRule} onClose={() => setEditRule(null)}  onSave={handleEdit}   />}
+      {showNew    && <RuleModal rule={null}     onClose={() => setShowNew(false)}   onSave={handleCreate} />}
+      {editRule   && <RuleModal rule={editRule}  onClose={() => setEditRule(null)}  onSave={handleEdit}   />}
       {deleteRule && <DeleteModal rule={deleteRule} onClose={() => setDeleteRule(null)} onConfirm={handleDelete} />}
     </div>
   );
