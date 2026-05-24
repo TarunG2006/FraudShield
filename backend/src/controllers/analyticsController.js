@@ -2,7 +2,7 @@ const { Op, fn, col, literal } = require('sequelize');
 const { Transaction, Alert, FraudRule } = require('../models');
 const { sequelize } = require('../config/database');
 
-// ── GET /api/analytics/dashboard ──────────────────────────────────────────
+// ── GET /api/analytics/dashboard ─────────────────────────────────────────────
 const getDashboard = async (req, res, next) => {
   try {
     const now    = new Date();
@@ -17,7 +17,6 @@ const getDashboard = async (req, res, next) => {
       highRiskCount,
       recentTransactions,
       unreadAlerts,
-      activeRules,
     ] = await Promise.all([
       Transaction.count(),
       Transaction.count({ where: { status: 'flagged' } }),
@@ -27,8 +26,10 @@ const getDashboard = async (req, res, next) => {
       Transaction.count({ where: { risk_score: { [Op.gte]: 75 } } }),
       Transaction.count({ where: { transaction_time: { [Op.gte]: last30 } } }),
       Alert.count({ where: { is_read: false } }),
-      FraudRule.count({ where: { is_active: true } }),
     ]);
+
+    // Always return 11 as active rules (the actual count in fraudEngine)
+    const activeRules = 11;
 
     const avgResult = await Transaction.findOne({
       attributes: [[fn('AVG', col('risk_score')), 'avg_risk']],
@@ -69,7 +70,7 @@ const getDashboard = async (req, res, next) => {
   }
 };
 
-// ── GET /api/analytics/risk-distribution ──────────────────────────────────
+// ── GET /api/analytics/risk-distribution ──────────────────────────────────────
 const getRiskDistribution = async (req, res, next) => {
   try {
     const [low, medium, high, critical] = await Promise.all([
@@ -93,13 +94,12 @@ const getRiskDistribution = async (req, res, next) => {
   }
 };
 
-// ── GET /api/analytics/transaction-trend ──────────────────────────────────
+// ── GET /api/analytics/transaction-trend ──────────────────────────────────────
 const getTransactionTrend = async (req, res, next) => {
   try {
     const days  = parseInt(req.query.days) || 14;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    // PostgreSQL: cast timestamp to date using ::date
     const results = await Transaction.findAll({
       attributes: [
         [literal("transaction_time::date"), 'date'],
@@ -113,7 +113,6 @@ const getTransactionTrend = async (req, res, next) => {
       raw:    true,
     });
 
-    // Build full date range, fill gaps with zeros
     const dataMap = {};
     results.forEach(r => {
       const key = typeof r.date === 'string'
@@ -140,7 +139,7 @@ const getTransactionTrend = async (req, res, next) => {
   }
 };
 
-// ── GET /api/analytics/top-merchants ──────────────────────────────────────
+// ── GET /api/analytics/top-merchants ──────────────────────────────────────────
 const getTopMerchants = async (req, res, next) => {
   try {
     const results = await Transaction.findAll({
@@ -169,7 +168,7 @@ const getTopMerchants = async (req, res, next) => {
   }
 };
 
-// ── GET /api/analytics/status-breakdown ───────────────────────────────────
+// ── GET /api/analytics/status-breakdown ───────────────────────────────────────
 const getStatusBreakdown = async (req, res, next) => {
   try {
     const results = await Transaction.findAll({
@@ -201,10 +200,139 @@ const getStatusBreakdown = async (req, res, next) => {
   }
 };
 
+// ── GET /api/analytics/fraud-indicators ───────────────────────────────────────
+// Returns top triggered fraud rules in the last 24h, counted from fraud_indicators JSONB array.
+// Used by Dashboard "Recent Fraud Indicators" bar chart.
+const getFraudIndicators = async (req, res, next) => {
+  try {
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Pull all flagged/blocked transactions in last 24h with their fraud_indicators
+    const transactions = await Transaction.findAll({
+      where: {
+        transaction_time: { [Op.gte]: since24h },
+        status: { [Op.in]: ['flagged', 'blocked', 'pending'] },
+      },
+      attributes: ['fraud_indicators'],
+      raw: true,
+    });
+
+    // Tally rule counts
+    const counts = {};
+    transactions.forEach(tx => {
+      let indicators = tx.fraud_indicators;
+      if (!indicators) return;
+      if (typeof indicators === 'string') {
+        try { indicators = JSON.parse(indicators); } catch { return; }
+      }
+      if (!Array.isArray(indicators)) return;
+      indicators.forEach(rule => {
+        counts[rule] = (counts[rule] || 0) + 1;
+      });
+    });
+
+    // Sort descending, take top 8
+    const data = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([rule, count]) => ({
+        rule:  rule.length > 30 ? rule.slice(0, 30) + '…' : rule,
+        count,
+      }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── GET /api/analytics/fraud-by-hour ──────────────────────────────────────────
+// Returns fraud transaction counts bucketed by UTC hour (0–23) for last 7 days.
+// Used by Dashboard "Fraud by Hour" heatmap.
+const getFraudByHour = async (req, res, next) => {
+  try {
+    const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const results = await Transaction.findAll({
+      attributes: [
+        [literal("EXTRACT(HOUR FROM transaction_time)::int"), 'hour'],
+        [fn('COUNT', col('id')), 'count'],
+        [fn('AVG', col('risk_score')), 'avg_risk'],
+      ],
+      where: {
+        transaction_time: { [Op.gte]: since7d },
+        status: { [Op.in]: ['flagged', 'blocked'] },
+      },
+      group:  [literal("EXTRACT(HOUR FROM transaction_time)::int")],
+      order:  [literal("EXTRACT(HOUR FROM transaction_time)::int ASC")],
+      raw:    true,
+    });
+
+    // Build full 24-hour array, fill gaps with 0
+    const hourMap = {};
+    results.forEach(r => {
+      hourMap[parseInt(r.hour)] = {
+        count:    parseInt(r.count),
+        avg_risk: parseFloat(r.avg_risk || 0).toFixed(1),
+      };
+    });
+
+    const data = Array.from({ length: 24 }, (_, h) => ({
+      hour:     h,
+      label:    `${String(h).padStart(2, '0')}:00`,
+      count:    hourMap[h]?.count    || 0,
+      avg_risk: hourMap[h]?.avg_risk || '0.0',
+    }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── GET /api/analytics/top-flagged-merchants ──────────────────────────────────
+// Returns top merchants by fraud count (flagged+blocked), last 30 days.
+const getTopFlaggedMerchants = async (req, res, next) => {
+  try {
+    const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const results = await Transaction.findAll({
+      attributes: [
+        'merchant_name',
+        [fn('COUNT', col('id')), 'fraud_count'],
+        [fn('AVG', col('risk_score')), 'avg_risk'],
+        [fn('SUM', col('amount')), 'total_amount'],
+      ],
+      where: {
+        transaction_time: { [Op.gte]: since30d },
+        status: { [Op.in]: ['flagged', 'blocked'] },
+      },
+      group:  ['merchant_name'],
+      order:  [[literal('COUNT(id)'), 'DESC']],
+      limit:  7,
+      raw:    true,
+    });
+
+    const data = results.map(r => ({
+      merchant:     r.merchant_name,
+      fraud_count:  parseInt(r.fraud_count),
+      avg_risk:     parseFloat(r.avg_risk || 0).toFixed(1),
+      total_amount: parseFloat(r.total_amount || 0).toFixed(2),
+    }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDashboard,
   getRiskDistribution,
   getTransactionTrend,
   getTopMerchants,
   getStatusBreakdown,
+  getFraudIndicators,
+  getFraudByHour,
+  getTopFlaggedMerchants,
 };

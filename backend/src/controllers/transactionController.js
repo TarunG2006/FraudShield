@@ -5,7 +5,7 @@ const { evaluateWithML }                     = require('../services/mlService');
 const { createAlert, emitTransactionUpdate } = require('../services/alertService');
 const { v4: uuidv4 }                         = require('uuid');
 
-// ── GET /api/transactions ─────────────────────────────────────────────────────
+// ── GET /api/transactions ────────────────────────────────────────────────────
 const getAll = async (req, res, next) => {
   try {
     const {
@@ -142,7 +142,7 @@ const markSafe = async (req, res, next) => {
   }
 };
 
-// ── GET /api/transactions/stats ──────────────────────────────────────────────
+// ── GET /api/transactions/stats ───────────────────────────────────────────────
 const getQuickStats = async (req, res, next) => {
   try {
     const [total, flagged, blocked, safe, highRisk] = await Promise.all([
@@ -180,9 +180,10 @@ const create = async (req, res, next) => {
       });
     }
 
-    // ── Fetch last 24h transactions for this card from DB ─────────────────────
-    // Used for velocity, structuring, and cycling detection in fraudEngine.
+    // ── Fetch last 24h transactions for this card from DB ──────────────────────
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const since1h  = new Date(Date.now() - 60 * 60 * 1000);
+
     const recentTransactions = await Transaction.findAll({
       where: {
         card_last_four,
@@ -192,19 +193,47 @@ const create = async (req, res, next) => {
       order: [['transaction_time', 'DESC']],
     });
 
-    // Scoring payload — shape matches fraudEngine + mlService expectations
+    // ── Compute REAL velocity counts for ML features ───────────────────────────
+    const transaction_count_24h = recentTransactions.length;
+    const transaction_count_1h  = recentTransactions.filter(tx => {
+      const txTime = new Date(tx.transaction_time);
+      return txTime >= since1h;
+    }).length;
+
+    // ── Compute amount_vs_avg_ratio ────────────────────────────────────────────
+    let amount_vs_avg_ratio = 1.0;
+    if (recentTransactions.length > 0) {
+      const avgAmount = recentTransactions.reduce(
+        (sum, tx) => sum + parseFloat(tx.amount), 0
+      ) / recentTransactions.length;
+      if (avgAmount > 0) {
+        amount_vs_avg_ratio = parseFloat(amount) / avgAmount;
+      }
+    }
+
+    // ── Determine if foreign country ───────────────────────────────────────────
+    const TRUSTED_LOCATIONS = ['US', 'GB', 'CA', 'AU', 'DE', 'FR', 'JP', 'SG', 'IN'];
+    const is_foreign_country = location_country &&
+      !TRUSTED_LOCATIONS.includes(location_country.toUpperCase()) ? 1 : 0;
+
+    // ── Scoring payload ────────────────────────────────────────────────────────
     const txnPayload = {
       amount,
       merchant_name,
-      merchantName:     merchant_name,
+      merchantName:          merchant_name,
       merchant_category,
-      merchantCategory: merchant_category,
-      location:         location_country,
-      country:          location_country,
-      createdAt:        new Date(),
+      merchantCategory:      merchant_category,
+      location:              location_country,
+      country:               location_country,
+      createdAt:             new Date(),
+      // Real computed ML features (fixes the always-1 bug)
+      transaction_count_1h,
+      transaction_count_24h,
+      amount_vs_avg_ratio,
+      is_foreign_country,
     };
 
-    // 1. Rule-based score — now receives LIVE recent transactions
+    // 1. Rule-based score
     const { riskScore: ruleScore, riskLevel, triggeredRules, recommendation } =
       await evaluateTransaction(txnPayload, recentTransactions);
 
@@ -241,7 +270,7 @@ const create = async (req, res, next) => {
     // 5. Alert if high risk
     await createAlert(transaction, finalScore, triggeredRules, recommendation);
 
-    // 6. Broadcast transaction update
+    // 6. Broadcast
     emitTransactionUpdate(transaction, finalScore, riskLevel);
 
     res.status(201).json({
