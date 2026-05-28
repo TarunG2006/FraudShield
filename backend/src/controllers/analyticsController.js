@@ -29,7 +29,7 @@ const getDashboard = async (req, res, next) => {
     ]);
 
     // Always return 11 as active rules (the actual count in fraudEngine)
-    const activeRules = 11;
+    const activeRules = await FraudRule.count({ where: { is_active: true } });
 
     const avgResult = await Transaction.findOne({
       attributes: [[fn('AVG', col('risk_score')), 'avg_risk']],

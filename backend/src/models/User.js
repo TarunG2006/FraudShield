@@ -50,5 +50,10 @@ User.beforeCreate(async (user) => {
     user.password_hash = await bcrypt.hash(user.password_hash, 12);
   }
 });
+User.beforeUpdate(async (user) => {
+  if (user.changed('password_hash')) {
+    user.password_hash = await bcrypt.hash(user.password_hash, 12);
+  }
+});
 
 module.exports = User;

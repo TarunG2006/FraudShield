@@ -78,22 +78,51 @@ function checkCycling24h(recentTransactions) {
 
 function checkRoundTripCycling(transaction, recentTransactions) {
   if (!Array.isArray(recentTransactions) || recentTransactions.length < 2) return false;
-  const currentMerchant = (transaction.merchant_name || transaction.merchantName || '').toLowerCase();
-  const currentAmount   = parseFloat(transaction.amount);
+  
+  const currentMerchant = (transaction.merchant_name || transaction.merchantName || '').toLowerCase().trim();
+  const currentAmount = parseFloat(transaction.amount);
+  
+  if (currentAmount < 200) return false; // ignore small amounts
+  
+  const now = Date.now();
+  const fourHoursAgo = now - 4 * 60 * 60 * 1000;
+  
+  // Only look at last 4 hours, not full 24h window
+  const recentPool = recentTransactions.filter(tx => {
+    const txTime = new Date(tx.transaction_time || tx.createdAt).getTime();
+    return txTime >= fourHoursAgo;
+  });
+  
+  if (recentPool.length < 2) return false;
+  
   const pool = [
-    ...recentTransactions.map(tx => ({
-      amount:   parseFloat(tx.amount),
-      merchant: (tx.merchant_name || '').toLowerCase(),
-    })),
+    ...recentPool.map(tx => ({
+      amount: parseFloat(tx.amount),
+      merchant: (tx.merchant_name || '').toLowerCase().trim(),
+    })).filter(tx => !isNaN(tx.amount) && tx.merchant),
     { amount: currentAmount, merchant: currentMerchant },
   ];
-  for (let i = 0; i < pool.length; i++) {
-    const ref = pool[i].amount;
-    if (!ref || ref < 50) continue;
-    const cluster = pool.filter(tx => Math.abs(tx.amount - ref) / ref <= 0.05);
-    const distinctMerchants = new Set(cluster.map(tx => tx.merchant)).size;
-    if (distinctMerchants >= 3 && cluster.length >= 3) return true;
+  
+  // Use a Set to avoid re-checking same reference amount
+  const checkedAmounts = new Set();
+  
+  for (const entry of pool) {
+    const ref = entry.amount;
+    if (!ref || ref < 200) continue;
+    
+    const roundedRef = Math.round(ref);
+    if (checkedAmounts.has(roundedRef)) continue;
+    checkedAmounts.add(roundedRef);
+    
+    const tolerance = ref < 500 ? 0.02 : 0.05; // tighter tolerance for smaller amounts
+    const cluster = pool.filter(tx => Math.abs(tx.amount - ref) / ref <= tolerance);
+    
+    if (cluster.length < 3) continue;
+    
+    const distinctMerchants = new Set(cluster.map(tx => tx.merchant).filter(Boolean));
+    if (distinctMerchants.size >= 3) return true;
   }
+  
   return false;
 }
 

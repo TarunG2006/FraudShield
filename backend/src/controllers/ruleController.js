@@ -98,7 +98,7 @@ const toggle = async (req, res, next) => {
 
     await AuditLog.create({
       user_id:     req.user.id,
-      action:      rule.is_active ? 'ENABLE_RULE' : 'DISABLE_RULE',
+      action: rule.is_active ? 'DISABLE_RULE' : 'ENABLE_RULE',
       entity_type: 'fraud_rule',
       entity_id:   rule.id,
       new_values:  { is_active: rule.is_active },

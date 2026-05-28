@@ -1,7 +1,7 @@
 // backend/src/services/alertService.js
 const { Alert, Transaction } = require('../models');
 
-const ALERT_THRESHOLD    = 70;
+const ALERT_THRESHOLD    = 40;
 const CRITICAL_THRESHOLD = 85;
 
 function getSeverity(score) {

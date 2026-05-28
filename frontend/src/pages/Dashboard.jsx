@@ -282,7 +282,7 @@ export default function Dashboard() {
           />
           <StatCard
             title="Active Rules"
-            value={11}
+            value={o.activeRules ?? 11}
             sub="Detection rules on"
             accent="blue"
             icon="◆"

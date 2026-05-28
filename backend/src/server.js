@@ -39,6 +39,7 @@ app.use('/api/', apiLimiter);
 // -- Health Check -----------------------------------------------------
 app.get('/health', (req, res) => {
   res.json({
+    status: 'ok',
     success: true,
     service: 'FraudShield API',
     timestamp: new Date().toISOString(),
