@@ -14,7 +14,8 @@ function buildMLPayload(transaction, ruleScore = 0) {
   const amount  = parseFloat(transaction.amount) || 0;
   const txDate  = transaction.createdAt ? new Date(transaction.createdAt) : new Date();
   const hour    = txDate.getHours();
-  const dow     = txDate.getDay(); // 0=Sunday
+  let dow = txDate.getDay() - 1;
+  if (dow === -1) dow = 6;
 
   const HIGH_RISK_CATS = new Set([
     'unknown', 'crypto', 'wire_transfer', 'gambling', 'pawn_shop',
@@ -33,10 +34,10 @@ function buildMLPayload(transaction, ruleScore = 0) {
     is_night:               (hour < 5 || hour >= 23) ? 1 : 0,
     is_foreign_country:     transaction.isForeignCountry ||
                             transaction.is_foreign_country || 0,
-    transaction_count_1h:   transaction.transactionCount1h ||
-                            transaction.transaction_count_1h || 1,
-    transaction_count_24h:  transaction.transactionCount24h ||
-                            transaction.transaction_count_24h || 1,
+    transaction_count_1h:   transaction.transactionCount1h ??
+                            transaction.transaction_count_1h ?? 1,
+    transaction_count_24h:  transaction.transactionCount24h ??
+                            transaction.transaction_count_24h ?? 1,
     amount_vs_avg_ratio:    parseFloat(
                               transaction.amountVsAvgRatio ||
                               transaction.amount_vs_avg_ratio
@@ -113,5 +114,6 @@ async function evaluateWithML(transaction, ruleScore) {
 }
 
 module.exports = { getMLScore, combineScores, evaluateWithML, buildMLPayload };
+
 
 

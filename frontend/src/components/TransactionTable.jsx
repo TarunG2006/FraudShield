@@ -52,7 +52,7 @@ function TransactionModal({ tx, onClose, onMarkedSafe }) {
     }
   }
 
-  const canMarkSafe = ['flagged', 'blocked', 'pending'].includes(status)
+  const canMarkSafe = ['flagged', 'blocked'].includes(status)
 
   return (
     <div style={{
@@ -104,7 +104,7 @@ function TransactionModal({ tx, onClose, onMarkedSafe }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
               <span style={{ color: '#64748b', fontSize: '12px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>Indicators</span>
               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {String(tx.fraud_indicators).split(' ').filter(Boolean).map(ind => (
+                {(Array.isArray(tx.fraud_indicators) ? tx.fraud_indicators : JSON.parse(tx.fraud_indicators || '[]')).map(ind => (
                   <span key={ind} style={{
                     background: 'rgba(239,68,68,0.1)', color: '#f87171',
                     border: '1px solid rgba(239,68,68,0.25)', borderRadius: '4px',
@@ -268,3 +268,4 @@ export default function TransactionTable({ transactions = [], loading = false, o
     </>
   )
 }
+

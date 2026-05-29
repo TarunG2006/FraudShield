@@ -36,9 +36,9 @@ function normalizeAlert(a) {
     severity:       a.severity ?? 'low',
     message:        a.message ?? '',
     recommendation: a.recommendation ?? '',
-    riskScore:      a.riskScore ?? a.risk_score ?? 0,
+    riskScore:      a.details?.riskScore ?? a.riskScore ?? a.risk_score ?? 0,
     createdAt:      a.createdAt ?? a.created_at ?? null,
-    triggeredRules: a.triggeredRules ?? a.triggered_rules ?? [],
+    triggeredRules: a.details?.triggeredRules ?? a.triggeredRules ?? a.triggered_rules ?? [],
     // Transaction fields may be nested or flat
     amount:         a.amount ?? a.transaction?.amount ?? null,
     merchantName:   a.merchantName ?? a.merchant_name ?? a.transaction?.merchant_name ?? null,
