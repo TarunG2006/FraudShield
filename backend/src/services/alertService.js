@@ -5,9 +5,9 @@ const ALERT_THRESHOLD    = 40;
 const CRITICAL_THRESHOLD = 85;
 
 function getSeverity(score) {
-  if (score >= CRITICAL_THRESHOLD) return 'critical';
-  if (score >= ALERT_THRESHOLD)    return 'high';
-  if (score >= 40)                 return 'medium';
+  if (score >= 85) return 'critical';
+  if (score >= 70) return 'high';
+  if (score >= 40) return 'medium';
   return 'low';
 }
 
